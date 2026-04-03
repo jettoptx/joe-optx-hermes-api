@@ -7,7 +7,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from hermes_optx_api.config import settings
-from hermes_optx_api.routes import sessions, skills, memory, config
+from hermes_optx_api.routes import sessions, skills, memory, config, tasks
 
 
 @asynccontextmanager
@@ -41,6 +41,7 @@ app.include_router(sessions.router, prefix="/api", tags=["sessions"])
 app.include_router(skills.router, prefix="/api", tags=["skills"])
 app.include_router(memory.router, prefix="/api", tags=["memory"])
 app.include_router(config.router, prefix="/api", tags=["config"])
+app.include_router(tasks.router, prefix="/api", tags=["tasks"])
 
 
 @app.get("/health")
