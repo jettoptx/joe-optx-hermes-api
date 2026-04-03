@@ -1,0 +1,128 @@
+"""FastAPI application — Enhanced API bridge for Hermes Agent."""
+
+from contextlib import asynccontextmanager
+
+import httpx
+from fastapi import FastAPI, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
+
+from hermes_optx_api.config import settings
+from hermes_optx_api.routes import sessions, skills, memory, config
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup/shutdown — create shared HTTP client for proxying."""
+    app.state.hermes_client = httpx.AsyncClient(
+        base_url=settings.hermes_agent_url,
+        timeout=30.0,
+    )
+    yield
+    await app.state.hermes_client.aclose()
+
+
+app = FastAPI(
+    title="hermes-optx-api",
+    description="Enhanced API bridge for Hermes Agent v0.7.0+ and Hermes Workspace",
+    version="0.1.0",
+    lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Enhanced endpoints (the missing APIs that Workspace needs)
+app.include_router(sessions.router, prefix="/api", tags=["sessions"])
+app.include_router(skills.router, prefix="/api", tags=["skills"])
+app.include_router(memory.router, prefix="/api", tags=["memory"])
+app.include_router(config.router, prefix="/api", tags=["config"])
+
+
+@app.get("/health")
+async def health(request: Request):
+    """Health check — also verifies upstream Hermes Agent connectivity."""
+    upstream_ok = False
+    try:
+        resp = await request.app.state.hermes_client.get("/health")
+        upstream_ok = resp.status_code == 200
+    except Exception:
+        pass
+
+    return {
+        "status": "ok",
+        "platform": "hermes-optx-api",
+        "version": "0.1.0",
+        "upstream": {
+            "url": settings.hermes_agent_url,
+            "connected": upstream_ok,
+        },
+        "memory_backend": settings.memory_backend,
+    }
+
+
+@app.api_route(
+    "/v1/{path:path}",
+    methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
+)
+async def proxy_v1(request: Request, path: str):
+    """Passthrough proxy — forward all /v1/* requests to Hermes Agent."""
+    client: httpx.AsyncClient = request.app.state.hermes_client
+    url = f"/v1/{path}"
+
+    headers = {
+        k: v for k, v in request.headers.items()
+        if k.lower() not in ("host", "content-length", "transfer-encoding")
+    }
+
+    body = await request.body()
+
+    resp = await client.request(
+        method=request.method,
+        url=url,
+        headers=headers,
+        content=body,
+        params=request.query_params,
+    )
+
+    return Response(
+        content=resp.content,
+        status_code=resp.status_code,
+        headers=dict(resp.headers),
+        media_type=resp.headers.get("content-type"),
+    )
+
+
+@app.get("/api/gateway-status")
+async def gateway_status(request: Request):
+    """Gateway status — tells Workspace we support enhanced mode."""
+    upstream_ok = False
+    model = ""
+    try:
+        resp = await request.app.state.hermes_client.get("/health")
+        upstream_ok = resp.status_code == 200
+        models_resp = await request.app.state.hermes_client.get("/v1/models")
+        if models_resp.status_code == 200:
+            data = models_resp.json()
+            if data.get("data"):
+                model = data["data"][0].get("id", "")
+    except Exception:
+        pass
+
+    return {
+        "status": "connected" if upstream_ok else "disconnected",
+        "mode": "enhanced-hermes",
+        "model": model,
+        "features": {
+            "sessions": True,
+            "skills": True,
+            "memory": True,
+            "config": True,
+            "jobs": True,
+            "streaming": True,
+        },
+    }
