@@ -18,6 +18,13 @@ class Settings(BaseModel):
     spacetimedb_db: str = os.getenv("SPACETIMEDB_DB", "")
     debug: bool = os.getenv("DEBUG", "").lower() in ("1", "true", "yes")
 
+    # MPP (Machine Payments Protocol) settings
+    mpp_enabled: bool = os.getenv("MPP_ENABLED", "").lower() in ("1", "true", "yes")
+    mpp_recipient: str = os.getenv("MPP_RECIPIENT", "")  # Tempo wallet address (0x...)
+    mpp_amount_per_request: str = os.getenv("MPP_AMOUNT", "0.10")  # pathUSD per request
+    mpp_network: str = os.getenv("MPP_NETWORK", "testnet")  # testnet | mainnet
+    mpp_fee_payer_key: str = os.getenv("MPP_FEE_PAYER_KEY", "")  # optional: sponsor gas
+
     @property
     def config_path(self) -> Path:
         return self.hermes_home / "config.yaml"

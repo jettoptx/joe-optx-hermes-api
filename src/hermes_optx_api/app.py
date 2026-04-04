@@ -3,10 +3,11 @@
 from contextlib import asynccontextmanager
 
 import httpx
-from fastapi import FastAPI, Request, Response
+from fastapi import Depends, FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from hermes_optx_api.config import settings
+from hermes_optx_api.payments import verify_payment
 from hermes_optx_api.routes import sessions, skills, memory, config, tasks
 
 
@@ -24,7 +25,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="hermes-optx-api",
     description="Enhanced API bridge for Hermes Agent v0.7.0+ and Hermes Workspace",
-    version="0.1.0",
+    version="0.2.0",
     lifespan=lifespan,
 )
 
@@ -36,17 +37,32 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Enhanced endpoints (the missing APIs that Workspace needs)
-app.include_router(sessions.router, prefix="/api", tags=["sessions"])
-app.include_router(skills.router, prefix="/api", tags=["skills"])
-app.include_router(memory.router, prefix="/api", tags=["memory"])
-app.include_router(config.router, prefix="/api", tags=["config"])
-app.include_router(tasks.router, prefix="/api", tags=["tasks"])
+# Enhanced endpoints — payment-gated when MPP_ENABLED=true
+app.include_router(
+    sessions.router, prefix="/api", tags=["sessions"],
+    dependencies=[Depends(verify_payment)],
+)
+app.include_router(
+    skills.router, prefix="/api", tags=["skills"],
+    dependencies=[Depends(verify_payment)],
+)
+app.include_router(
+    memory.router, prefix="/api", tags=["memory"],
+    dependencies=[Depends(verify_payment)],
+)
+app.include_router(
+    config.router, prefix="/api", tags=["config"],
+    dependencies=[Depends(verify_payment)],
+)
+app.include_router(
+    tasks.router, prefix="/api", tags=["tasks"],
+    dependencies=[Depends(verify_payment)],
+)
 
 
 @app.get("/health")
 async def health(request: Request):
-    """Health check — also verifies upstream Hermes Agent connectivity."""
+    """Health check — always free, no auth required."""
     upstream_ok = False
     try:
         resp = await request.app.state.hermes_client.get("/health")
@@ -57,18 +73,20 @@ async def health(request: Request):
     return {
         "status": "ok",
         "platform": "hermes-optx-api",
-        "version": "0.1.0",
+        "version": "0.2.0",
         "upstream": {
             "url": settings.hermes_agent_url,
             "connected": upstream_ok,
         },
         "memory_backend": settings.memory_backend,
+        "mpp_enabled": settings.mpp_enabled,
     }
 
 
 @app.api_route(
     "/v1/{path:path}",
     methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
+    dependencies=[Depends(verify_payment)],
 )
 async def proxy_v1(request: Request, path: str):
     """Passthrough proxy — forward all /v1/* requests to Hermes Agent."""
@@ -125,5 +143,6 @@ async def gateway_status(request: Request):
             "config": True,
             "jobs": True,
             "streaming": True,
+            "mpp": settings.mpp_enabled,
         },
     }

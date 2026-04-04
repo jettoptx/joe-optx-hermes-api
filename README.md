@@ -32,6 +32,9 @@ docker compose up -d
 # Or standalone
 pip install -e .
 hermes-optx-api --hermes-url http://localhost:8642 --port 8643
+
+# With MPP payment support
+pip install -e ".[mpp]"
 ```
 
 ## Configuration
@@ -45,6 +48,99 @@ hermes-optx-api --hermes-url http://localhost:8642 --port 8643
 | `MEMORY_BACKEND` | `holographic` | Memory backend: `holographic`, `sqlite`, `spacetimedb`, `custom` |
 | `MEMORY_DB_URL` | `""` | Connection URL for external memory backends |
 | `API_KEY` | `""` | Optional API key for authentication |
+| `MPP_ENABLED` | `false` | Enable MPP pay-per-request gating |
+| `MPP_RECIPIENT` | `""` | Your Tempo wallet address (0x...) |
+| `MPP_AMOUNT` | `0.10` | pathUSD charged per request |
+| `MPP_NETWORK` | `testnet` | `testnet` or `mainnet` |
+| `MPP_FEE_PAYER_KEY` | `""` | Optional: sponsor gas for clients |
+
+## MPP (Machine Payments Protocol)
+
+Pay-per-request via [Tempo](https://tempo.xyz) stablecoins using the [MPP protocol](https://mpp.dev). Clients pay with `tempo` CLI, `mppx`, or any MPP-compatible wallet/agent.
+
+### How It Works
+
+```
+Client                          hermes-optx-api                    Tempo Chain
+  │                                   │                                │
+  │─── GET /v1/chat/completions ────▶│                                │
+  │                                   │ (no payment credential)       │
+  │◀── 402 + WWW-Authenticate ──────│                                │
+  │                                   │                                │
+  │─── GET + Authorization: Payment ▶│                                │
+  │                                   │── verify on-chain ───────────▶│
+  │                                   │◀─ confirmed ─────────────────│
+  │◀── 200 + Payment-Receipt ───────│                                │
+```
+
+### Setup
+
+1. **Install with MPP support:**
+   ```bash
+   pip install -e ".[mpp]"
+   ```
+
+2. **Configure `.env`:**
+   ```env
+   MPP_ENABLED=true
+   MPP_RECIPIENT=0x73cEA865A381c731Aa1c370381E714bCc4b75adf
+   MPP_AMOUNT=0.10
+   MPP_NETWORK=testnet
+   ```
+
+3. **Start the server:**
+   ```bash
+   hermes-optx-api
+   ```
+
+### Pricing
+
+$0.10 pathUSD per API call covers:
+- ~$0.001 MPP protocol fee
+- ~$0.005–$0.02 xAI Grok 4.20 multi-agent cost (varies by tokens)
+- ~$0.08 net margin
+
+### Client Usage
+
+**With Tempo CLI:**
+```bash
+tempo request -t -X POST \
+  --json '{"model":"hermes","messages":[{"role":"user","content":"hello"}]}' \
+  http://localhost:8643/v1/chat/completions
+```
+
+**With mppx (npm):**
+```bash
+npx mppx http://localhost:8643/v1/chat/completions \
+  -X POST -H "Content-Type: application/json" \
+  -d '{"model":"hermes","messages":[{"role":"user","content":"hello"}]}'
+```
+
+**With API key (bypass payment):**
+```bash
+curl http://localhost:8643/v1/chat/completions \
+  -H "Authorization: Bearer your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"hermes","messages":[{"role":"user","content":"hello"}]}'
+```
+
+### Auth Priority
+
+| Credential | Result |
+|------------|--------|
+| Valid `API_KEY` in `Authorization: Bearer` | Access granted (subscriber, no payment) |
+| Valid MPP payment credential | Access granted (pay-per-request) |
+| No credential, MPP enabled | `402 Payment Required` with challenge |
+| No credential, MPP disabled, key required | `401 Unauthorized` |
+| No credential, nothing configured | Open access |
+
+### Protected Routes
+
+All routes except `/health` are gated when MPP is enabled:
+- `/v1/*` (Hermes Agent proxy)
+- `/api/sessions`, `/api/skills`, `/api/memory`, `/api/config`, `/api/tasks`
+
+`/health` and `/api/gateway-status` are always free.
 
 ## Memory Backends
 
@@ -56,19 +152,6 @@ hermes-optx-api ships with a pluggable memory interface. Swap backends without c
 | `sqlite` | Standalone SQLite with FTS5 | `MEMORY_DB_URL=sqlite:///path/to/db` |
 | `spacetimedb` | SpacetimeDB edge database | `MEMORY_DB_URL=http://host:3000` + `SPACETIMEDB_DB=dbname` |
 | `custom` | Bring your own backend | Implement `MemoryBackend` interface |
-
-### Custom Memory Backend
-
-```python
-from hermes_optx_api.memory.base import MemoryBackend
-
-class MyBackend(MemoryBackend):
-    async def store(self, content, metadata=None): ...
-    async def recall(self, query, limit=10): ...
-    async def search(self, query, filters=None): ...
-    async def delete(self, memory_id): ...
-    async def list_all(self, limit=100, offset=0): ...
-```
 
 ## Docker Compose Integration
 
@@ -84,6 +167,10 @@ services:
       - HERMES_AGENT_URL=http://hermes-agent:8642
       - HERMES_HOME=/home/hermes/.hermes
       - MEMORY_BACKEND=holographic
+      - MPP_ENABLED=true
+      - MPP_RECIPIENT=0x73cEA865A381c731Aa1c370381E714bCc4b75adf
+      - MPP_AMOUNT=0.10
+      - MPP_NETWORK=testnet
     volumes:
       - hermes-data:/home/hermes/.hermes:ro
     depends_on:
@@ -91,7 +178,7 @@ services:
 
   hermes-workspace:
     environment:
-      - HERMES_API_URL=http://hermes-optx-api:8643  # Point workspace here instead
+      - HERMES_API_URL=http://hermes-optx-api:8643
 ```
 
 ## Architecture
@@ -101,6 +188,10 @@ services:
 │ Hermes Workspace │────▶│  hermes-optx-api     │────▶│  Hermes Agent    │
 │ (React UI :5555) │     │  (FastAPI :8643)      │     │  (Gateway :8642) │
 └──────────────────┘     │                      │     └──────────────────┘
+                         │  Auth layer:          │
+                         │  API_KEY → bypass     │
+                         │  MPP 402 → pay $0.10  │
+                         │                      │
                          │  Enhanced endpoints:  │
                          │  /api/sessions        │──▶ state.db (SQLite)
                          │  /api/skills          │──▶ skills directory
@@ -110,13 +201,9 @@ services:
                          │                      │
                          │  Passthrough:         │
                          │  /v1/*               │──▶ proxy to agent
-                         │  /health             │──▶ proxy to agent
+                         │  /health             │──▶ free (no auth)
                          └──────────────────────┘
 ```
-
-## Contributing
-
-PRs welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 
