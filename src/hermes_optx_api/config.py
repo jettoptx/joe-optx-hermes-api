@@ -24,6 +24,7 @@ class Settings(BaseModel):
     mpp_amount_per_request: str = os.getenv("MPP_AMOUNT", "0.10")  # pathUSD per request
     mpp_network: str = os.getenv("MPP_NETWORK", "testnet")  # testnet | mainnet
     mpp_fee_payer_key: str = os.getenv("MPP_FEE_PAYER_KEY", "")  # optional: sponsor gas
+    mpp_secret_key: str = os.getenv("MPP_SECRET_KEY", "")  # server-side challenge signing key
 
     @property
     def config_path(self) -> Path:
