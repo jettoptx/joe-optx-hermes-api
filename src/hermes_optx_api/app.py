@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from hermes_optx_api.config import settings
 from hermes_optx_api.payments import verify_payment
-from hermes_optx_api.routes import sessions, skills, memory, config, tasks
+from hermes_optx_api.routes import sessions, skills, memory, config, tasks, wallet
 
 
 @asynccontextmanager
@@ -56,6 +56,11 @@ app.include_router(
 )
 app.include_router(
     tasks.router, prefix="/api", tags=["tasks"],
+    dependencies=[Depends(verify_payment)],
+)
+# Tempo Wallet — metered HEDGEHOG billing + escrow + on-chain balances
+app.include_router(
+    wallet.router, prefix="/api", tags=["wallet"],
     dependencies=[Depends(verify_payment)],
 )
 
@@ -144,5 +149,7 @@ async def gateway_status(request: Request):
             "jobs": True,
             "streaming": True,
             "mpp": settings.mpp_enabled,
+            "wallet": True,
+            "tempo_billing": True,
         },
     }

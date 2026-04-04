@@ -233,8 +233,12 @@ async def claim_task(task_id: str, claim: TaskClaim):
     # Check if gaze verification required
     meta = data.get("metadata", {})
     if meta.get("gaze_required"):
-        # TODO: Check AARON Router for recent gaze attestation
-        pass
+        gaze_ok = await _verify_gaze_attestation(claim.agent_name)
+        if not gaze_ok:
+            raise HTTPException(
+                status_code=403,
+                detail="Gaze verification required — complete AARON session first",
+            )
 
     # Update task status
     data["status"] = TaskStatus.claimed.value
@@ -487,6 +491,24 @@ async def _decompose_goal(goal: str, strategy: str, agent_count: int) -> list[di
 
     # Fallback: single task
     return [{"title": goal, "description": goal, "priority": 5, "capabilities": [], "agent": "astrojoe"}]
+
+
+async def _verify_gaze_attestation(agent_name: str) -> bool:
+    """Check AARON Router for a recent gaze attestation for this agent."""
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            resp = await client.get(
+                "http://100.85.183.16:8888/gaze/recent",
+                params={"agent": agent_name},
+                headers={"Content-Type": "application/json"},
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get("verified") and data.get("age_seconds", 999) < 300:
+                    return True
+    except Exception:
+        pass
+    return False
 
 
 @router.get("/tasks/stats")
