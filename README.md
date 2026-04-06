@@ -2,7 +2,11 @@
 
 **Enhanced API bridge for [Hermes Agent](https://github.com/NousResearch/hermes-agent) v0.7.0+ and [Hermes Workspace](https://github.com/outsourc-e/hermes-workspace)**
 
+> **[Read the full OPTX documentation](https://optxspace.dev/docs/getting-started/what-is-optx)**
+
 Hermes Workspace expects enhanced gateway endpoints (`/api/sessions`, `/api/skills`, `/api/memory`, `/api/config`) that the upstream NousResearch Hermes Agent doesn't yet provide. This bridge fills the gap — unlocking the full Workspace UI (Memory, Skills, Sessions, Settings) without forking the agent.
+
+Part of the **[OPTX ecosystem](https://optxspace.dev)** — privacy-preserving spatial encryption for the agentic web.
 
 ## The Problem
 
@@ -211,4 +215,4 @@ MIT - See [LICENSE](LICENSE)
 
 ---
 
-Built by [Jett Optical Technologies](https://jettoptics.ai)
+Built by [OPTX](https://optxspace.dev) · [Jett Optical Technologies](https://jettoptics.ai)
