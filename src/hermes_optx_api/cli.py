@@ -31,7 +31,7 @@ def main():
         import os
         os.environ["HERMES_AGENT_URL"] = args.hermes_url
 
-    print(f"hermes-optx-api v0.1.0")
+    print(f"hermes-optx-api v0.3.0")
     print(f"  Hermes Agent: {args.hermes_url}")
     print(f"  Listening:    {args.host}:{args.port}")
     print(f"  Memory:       {settings.memory_backend}")

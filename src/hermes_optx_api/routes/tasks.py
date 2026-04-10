@@ -454,7 +454,7 @@ async def _decompose_goal(goal: str, strategy: str, agent_count: int) -> list[di
             resp = await client.post(
                 "http://100.85.183.16:8811/v1/chat/completions",
                 json={
-                    "model": "grok-3-fast",
+                    "model": "grok-4.20-0309-reasoning",
                     "messages": [
                         {
                             "role": "system",

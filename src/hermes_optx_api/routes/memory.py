@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from hermes_optx_api.config import settings
 from hermes_optx_api.memory.base import MemoryBackend
 from hermes_optx_api.memory.holographic import HolographicBackend
+from hermes_optx_api.memory.spacetimedb import SpacetimeDBBackend
 
 router = APIRouter()
 
@@ -15,6 +16,7 @@ router = APIRouter()
 _backends: dict[str, type[MemoryBackend]] = {
     "holographic": HolographicBackend,
     "sqlite": HolographicBackend,  # same impl, different name for clarity
+    "spacetimedb": SpacetimeDBBackend,
 }
 
 _active_backend: Optional[MemoryBackend] = None

@@ -4,15 +4,15 @@ build-backend = "hatchling.build"
 
 [project]
 name = "hermes-optx-api"
-version = "0.2.0"
-description = "Enhanced API bridge for Hermes Agent v0.7.0+ and Hermes Workspace"
+version = "0.3.0"
+description = "Enhanced API bridge for Hermes Agent v0.8.0+ — gateway proxy, SSE streaming, memory, tasks, wallet"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
 authors = [
     { name = "Jett Optical Technologies", email = "dev@jettoptics.ai" },
 ]
-keywords = ["hermes", "agent", "api", "bridge", "workspace", "mpp"]
+keywords = ["hermes", "agent", "api", "bridge", "workspace", "mpp", "sse", "streaming"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Framework :: FastAPI",
@@ -28,6 +28,7 @@ dependencies = [
     "pyyaml>=6.0",
     "aiosqlite>=0.20.0",
     "pydantic>=2.0",
+    "sse-starlette>=2.0.0",
 ]
 
 [project.optional-dependencies]

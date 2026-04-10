@@ -12,4 +12,7 @@ RUN pip install --no-cache-dir -e .
 
 EXPOSE 8643
 
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+    CMD curl -f http://localhost:8643/health || exit 1
+
 CMD ["hermes-optx-api"]
